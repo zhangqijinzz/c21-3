@@ -23,16 +23,29 @@ import {
   compareScenarios,
   removeScenario,
   restoreScenario,
+  saveScanBoundaryScenarios,
   saveScenario,
   type ScenarioComparison,
 } from "../scenarios/scenarioViewModel";
 import { removeProject, updateProject } from "../projects/projectViewModel";
 import { simulateProject } from "../../shared/domain/simulation";
+import {
+  runBudgetScan,
+  type BudgetScanResult,
+  type ScanAxisRequest,
+} from "../../shared/domain/scan";
 
 export type LabStatus =
-  "loading" | "ready" | "editing" | "simulating" | "error" | "completed";
+  | "loading"
+  | "ready"
+  | "editing"
+  | "simulating"
+  | "scanning"
+  | "error"
+  | "completed"
+  | "cancelled";
 export type LabModule =
-  "projects" | "graph" | "simulation" | "scenarios" | "archive";
+  "projects" | "graph" | "simulation" | "scan" | "scenarios" | "archive";
 
 export function useLatencyLab() {
   const repository = useMemo(() => new ProjectRepository(), []);
@@ -46,6 +59,14 @@ export function useLatencyLab() {
     comparisonId: string;
   }>({ baselineId: "", comparisonId: "" });
   const [notice, setNotice] = useState("");
+  const [scanResult, setScanResult] = useState<BudgetScanResult | null>(null);
+  const [scanProgress, setScanProgress] = useState({
+    completed: 0,
+    total: 0,
+  });
+  const scanRunId = useRef(0);
+  const scanAbortRef = useRef<{ aborted: boolean } | null>(null);
+  const scanSourceRef = useRef<LatencyProject | null>(null);
   const [persisted, setPersisted] = useState<"saving" | "saved" | "error">(
     "saved",
   );
@@ -79,6 +100,15 @@ export function useLatencyLab() {
   const simulationValid =
     Boolean(activeProject) &&
     result?.entries.length === activeProject?.nodes.length;
+
+  useEffect(() => {
+    if (scanAbortRef.current) scanAbortRef.current.aborted = true;
+    scanAbortRef.current = null;
+    scanRunId.current += 1;
+    setScanResult(null);
+    setScanProgress({ completed: 0, total: 0 });
+    scanSourceRef.current = null;
+  }, [activeProject?.id]);
 
   const selectComparisonScenario = useCallback(
     (side: "baselineId" | "comparisonId", id: string) => {
@@ -228,6 +258,100 @@ export function useLatencyLab() {
     [activeProject, mode],
   );
 
+  const runScan = useCallback(
+    async (
+      targetMs: number,
+      axes: ScanAxisRequest[],
+    ): Promise<BudgetScanResult | undefined> => {
+      if (!activeProject) return undefined;
+      if (scanAbortRef.current) scanAbortRef.current.aborted = true;
+      const sourceProject = structuredClone(activeProject);
+      const runId = ++scanRunId.current;
+      const signal = { aborted: false };
+      scanAbortRef.current = signal;
+      scanSourceRef.current = sourceProject;
+      setScanResult(null);
+      setScanProgress({ completed: 0, total: 0 });
+      setStatus("scanning");
+      setNotice("");
+      const scan = await runBudgetScan(
+        {
+          project: sourceProject,
+          mode,
+          targetMs,
+          axes: axes.length === 1 ? [axes[0]!] : [axes[0]!, axes[1]!],
+        },
+        {
+          signal,
+          onProgress: (completed, total) => {
+            if (scanRunId.current === runId)
+              setScanProgress({ completed, total });
+          },
+        },
+      );
+      if (scanRunId.current !== runId) return undefined;
+      setScanResult(scan);
+      if (scan.status === "invalid") {
+        setStatus("error");
+        setNotice(scan.errors[0] ?? "扫描参数无效，请调整后重试。");
+      } else if (scan.status === "cancelled") {
+        setStatus("cancelled");
+        setNotice("扫描已取消，未使用部分推演结果生成结论。");
+      } else {
+        setStatus("completed");
+        setNotice(
+          scan.outcome === "crossed"
+            ? `扫描完成：已推演 ${scan.totalPoints.toLocaleString("zh-CN")} 个参数组合并找到临界边界。`
+            : `扫描完成：已完整推演 ${scan.totalPoints.toLocaleString("zh-CN")} 个参数组合，但该区间内${scan.outcome === "all-safe" ? "始终未超线" : "一开始就已超线"}。`,
+        );
+      }
+      return scan;
+    },
+    [activeProject, mode],
+  );
+
+  const cancelScan = useCallback(() => {
+    if (scanAbortRef.current) scanAbortRef.current.aborted = true;
+    scanRunId.current += 1;
+    setStatus("cancelled");
+    setNotice("正在停止扫描；已完成的部分不会作为结论。");
+  }, []);
+
+  const saveScanSnapshots = useCallback((): boolean => {
+    const sourceProject = scanSourceRef.current;
+    if (
+      !sourceProject ||
+      !activeProject ||
+      sourceProject.id !== activeProject.id ||
+      !scanResult ||
+      scanResult.status !== "completed" ||
+      !scanResult.boundary
+    ) {
+      setNotice("只有找到临界边界的完整扫描才能保存临界点快照。");
+      return false;
+    }
+    const current = documentRef.current;
+    if (!current) return false;
+    const withScenarios = saveScanBoundaryScenarios(
+      activeProject,
+      sourceProject,
+      scanResult.boundary,
+      scanResult.targetMs,
+      scanResult.mode,
+    );
+    const scenarioIds = withScenarios.scenarios
+      .slice(0, 2)
+      .map((item) => item.id);
+    const next = updateProject(current, withScenarios);
+    commit(next, "completed");
+    setComparisonIds({
+      baselineId: scenarioIds[1] ?? "",
+      comparisonId: scenarioIds[0] ?? "",
+    });
+    setNotice("临界前与越线点两份方案快照已保存，可在方案对比中查看。");
+    return true;
+  }, [activeProject, commit, scanResult]);
+
   const saveSnapshot = useCallback(
     (name: string): boolean => {
       if (!activeProject) return false;
@@ -291,6 +415,11 @@ export function useLatencyLab() {
     setNodeDependency,
     setLimit,
     simulate,
+    scanResult,
+    scanProgress,
+    runScan,
+    cancelScan,
+    saveScanSnapshots,
     saveSnapshot,
     removeSavedScenario,
     restoreSavedScenario,

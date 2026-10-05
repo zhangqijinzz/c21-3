@@ -30,7 +30,7 @@ export default function ArchivePanel({
     <section className="module-page archive-page">
       <div className="module-heading">
         <div>
-          <span className="eyebrow">05 / LOCAL ARCHIVE</span>
+          <span className="eyebrow">06 / LOCAL ARCHIVE</span>
           <h1>本地项目区</h1>
           <p>链路项目和方案快照只保存在当前设备的浏览器中。</p>
         </div>

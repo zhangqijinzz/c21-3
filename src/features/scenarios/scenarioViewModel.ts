@@ -1,7 +1,14 @@
+import {
+  buildProjectAtPoint,
+  type ScannedPoint,
+  type ScanBoundaryPair,
+} from "../../shared/domain/scan";
 import type {
   LatencyProject,
   RequestNode,
+  ScanSnapshotPoint,
   ScenarioSnapshot,
+  SimulationMode,
   SimulationResult,
 } from "../../shared/domain/types";
 
@@ -98,6 +105,79 @@ export function saveScenario(
     completionMs: result.completionMs,
     criticalPath: [...result.criticalPath],
   };
+  return prependScenario(project, snapshot);
+}
+
+export function saveScanBoundaryScenarios(
+  targetProject: LatencyProject,
+  sourceProject: LatencyProject,
+  boundary: ScanBoundaryPair,
+  targetMs: number,
+  mode: SimulationMode,
+): LatencyProject {
+  const safeProject = buildProjectAtPoint(sourceProject, boundary.safePoint);
+  const safeSnapshot = createScanPointSnapshot(
+    safeProject,
+    boundary.safePoint,
+    targetMs,
+    mode,
+    "safe",
+    boundary.thresholdLabel,
+  );
+  const breachProject = buildProjectAtPoint(
+    sourceProject,
+    boundary.breachPoint,
+  );
+  const breachSnapshot = createScanPointSnapshot(
+    breachProject,
+    boundary.breachPoint,
+    targetMs,
+    mode,
+    "breached",
+    boundary.thresholdLabel,
+  );
+  return prependScenario(
+    prependScenario(targetProject, safeSnapshot),
+    breachSnapshot,
+  );
+}
+
+function createScanPointSnapshot(
+  scannedProject: LatencyProject,
+  point: ScannedPoint,
+  targetMs: number,
+  mode: SimulationMode,
+  kind: ScanSnapshotPoint,
+  thresholdLabel: string,
+): ScenarioSnapshot {
+  return {
+    id: crypto.randomUUID(),
+    name:
+      kind === "safe"
+        ? `临界前 · ${thresholdLabel}`
+        : `越线点 · ${thresholdLabel}`,
+    createdAt: Date.now(),
+    concurrencyLimit: scannedProject.concurrencyLimit,
+    nodes: structuredClone(scannedProject.nodes),
+    completionMs: point.result.completionMs,
+    criticalPath: [...point.result.criticalPath],
+    scan: {
+      targetMs,
+      mode,
+      point: kind,
+      thresholdLabel,
+      parameters: point.values.map((value) => ({
+        label: value.label,
+        value: value.value,
+      })),
+    },
+  };
+}
+
+function prependScenario(
+  project: LatencyProject,
+  snapshot: ScenarioSnapshot,
+): LatencyProject {
   return {
     ...project,
     scenarios: [snapshot, ...project.scenarios],

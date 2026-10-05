@@ -7,6 +7,7 @@ import {
   Plus,
   RadioTower,
   RotateCcw,
+  ScanLine,
   Sparkles,
   X,
 } from "lucide-react";
@@ -14,6 +15,7 @@ import { useLatencyLab } from "./useLatencyLab";
 import ProjectsPanel from "../projects/ProjectsPanel";
 import GraphEditor from "../graph-editor/GraphEditor";
 import SimulationPanel from "../simulation/SimulationPanel";
+import ScanPanel from "../simulation/ScanPanel";
 import ScenarioPanel from "../scenarios/ScenarioPanel";
 import ArchivePanel from "../archive/ArchivePanel";
 import Sidebar, { type NavigationItem } from "./Sidebar";
@@ -26,6 +28,12 @@ const navigation: NavigationItem[] = [
     label: "时序推演",
     sublabel: "SIMULATION",
     icon: Activity,
+  },
+  {
+    id: "scan",
+    label: "越线扫描",
+    sublabel: "BUDGET SCAN",
+    icon: ScanLine,
   },
   {
     id: "scenarios",
@@ -160,6 +168,22 @@ export default function LatencyLabView() {
               }}
             />
           )}
+          {vm.module === "scan" && (
+            <ScanPanel
+              key={active.id}
+              project={active}
+              mode={vm.mode}
+              currentCompletionMs={vm.result.completionMs}
+              result={vm.scanResult}
+              progress={vm.scanProgress}
+              isScanning={vm.status === "scanning"}
+              onRun={async (targetMs, axes) => {
+                await vm.runScan(targetMs, axes);
+              }}
+              onCancel={vm.cancelScan}
+              onSaveSnapshots={vm.saveScanSnapshots}
+            />
+          )}
           {vm.module === "scenarios" && (
             <ScenarioPanel
               project={active}
@@ -195,9 +219,13 @@ export default function LatencyLabView() {
             <span className="footer-pulse" />
             {vm.status === "simulating"
               ? "推演运行中"
-              : vm.simulationValid
-                ? "推演准备完成"
-                : "等待链路配置"}
+              : vm.status === "scanning"
+                ? "预算扫描运行中"
+                : vm.status === "cancelled"
+                  ? "扫描已取消"
+                  : vm.simulationValid
+                    ? "推演准备完成"
+                    : "等待链路配置"}
           </span>
           <span>
             LATENCYLAB <b>·</b> LOCAL FIRST <b>·</b> V1.0

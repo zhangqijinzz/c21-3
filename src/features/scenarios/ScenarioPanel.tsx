@@ -50,7 +50,7 @@ export default function ScenarioPanel({
     <section className="module-page scenarios-page">
       <div className="module-heading">
         <div>
-          <span className="eyebrow">04 / SCENARIOS</span>
+          <span className="eyebrow">05 / SCENARIOS</span>
           <h1>方案对比</h1>
           <p>保存关键参数快照，判断一次调整是否真的缩短了等待。</p>
         </div>
@@ -165,6 +165,20 @@ export default function ScenarioPanel({
                 <span className="snapshot-badge">S</span>
                 <div className="snapshot-info">
                   <strong>{scenario.name}</strong>
+                  {scenario.scan && (
+                    <em
+                      className={
+                        scenario.scan.point === "safe"
+                          ? "scan-badge scan-badge-safe"
+                          : "scan-badge scan-badge-breach"
+                      }
+                    >
+                      {scenario.scan.point === "safe"
+                        ? "临界前快照"
+                        : "越线点快照"}{" "}
+                      · 目标 {formatDuration(scenario.scan.targetMs)}
+                    </em>
+                  )}
                   <small>
                     {new Date(scenario.createdAt).toLocaleString("zh-CN", {
                       month: "numeric",

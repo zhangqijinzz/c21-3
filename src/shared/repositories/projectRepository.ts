@@ -59,6 +59,38 @@ function parseNode(value: unknown): RequestNode | undefined {
   };
 }
 
+function parseScan(value: unknown): ScenarioSnapshot["scan"] | undefined {
+  if (!isRecord(value)) return undefined;
+  if (
+    typeof value.targetMs !== "number" ||
+    (value.mode !== "low" &&
+      value.mode !== "expected" &&
+      value.mode !== "high") ||
+    (value.point !== "safe" && value.point !== "breached") ||
+    typeof value.thresholdLabel !== "string" ||
+    !Array.isArray(value.parameters)
+  )
+    return undefined;
+  const parameters = value.parameters
+    .map((item) => {
+      if (
+        !isRecord(item) ||
+        typeof item.label !== "string" ||
+        !isFiniteNumber(item.value)
+      )
+        return undefined;
+      return { label: item.label, value: item.value };
+    })
+    .filter((item): item is { label: string; value: number } => Boolean(item));
+  return {
+    targetMs: value.targetMs,
+    mode: value.mode,
+    point: value.point,
+    thresholdLabel: value.thresholdLabel,
+    parameters,
+  };
+}
+
 function parseScenario(value: unknown): ScenarioSnapshot | undefined {
   if (
     !isRecord(value) ||
@@ -74,6 +106,7 @@ function parseScenario(value: unknown): ScenarioSnapshot | undefined {
     typeof completionMs !== "number"
   )
     return undefined;
+  const scan = isRecord(value.scan) ? parseScan(value.scan) : undefined;
   return {
     id,
     name,
@@ -89,6 +122,7 @@ function parseScenario(value: unknown): ScenarioSnapshot | undefined {
     criticalPath: value.criticalPath.filter(
       (id): id is string => typeof id === "string",
     ),
+    ...(scan ? { scan } : {}),
   };
 }
 

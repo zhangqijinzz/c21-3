@@ -10,6 +10,16 @@ export interface RequestNode {
   fallbackNodeId?: string;
 }
 
+export type ScanSnapshotPoint = "safe" | "breached";
+
+export interface ScanSnapshotSummary {
+  targetMs: number;
+  mode: SimulationMode;
+  point: ScanSnapshotPoint;
+  thresholdLabel: string;
+  parameters: { label: string; value: number }[];
+}
+
 export interface ScenarioSnapshot {
   id: string;
   name: string;
@@ -18,6 +28,7 @@ export interface ScenarioSnapshot {
   nodes: RequestNode[];
   completionMs: number;
   criticalPath: string[];
+  scan?: ScanSnapshotSummary;
 }
 
 export interface LatencyProject {
