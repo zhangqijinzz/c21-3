@@ -7,6 +7,7 @@ import {
   Plus,
   RadioTower,
   RotateCcw,
+  ScanLine,
   Sparkles,
   X,
 } from "lucide-react";
@@ -14,6 +15,7 @@ import { useLatencyLab } from "./useLatencyLab";
 import ProjectsPanel from "../projects/ProjectsPanel";
 import GraphEditor from "../graph-editor/GraphEditor";
 import SimulationPanel from "../simulation/SimulationPanel";
+import SweepPanel from "../budget-sweep/SweepPanel";
 import ScenarioPanel from "../scenarios/ScenarioPanel";
 import ArchivePanel from "../archive/ArchivePanel";
 import Sidebar, { type NavigationItem } from "./Sidebar";
@@ -26,6 +28,12 @@ const navigation: NavigationItem[] = [
     label: "时序推演",
     sublabel: "SIMULATION",
     icon: Activity,
+  },
+  {
+    id: "sweep",
+    label: "临界扫描",
+    sublabel: "BUDGET SWEEP",
+    icon: ScanLine,
   },
   {
     id: "scenarios",
@@ -158,6 +166,13 @@ export default function LatencyLabView() {
               onRun={() => {
                 vm.simulate(vm.mode);
               }}
+            />
+          )}
+          {vm.module === "sweep" && (
+            <SweepPanel
+              project={active}
+              mode={vm.mode}
+              controller={vm.sweepController}
             />
           )}
           {vm.module === "scenarios" && (

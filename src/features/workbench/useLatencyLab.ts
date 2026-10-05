@@ -28,11 +28,27 @@ import {
 } from "../scenarios/scenarioViewModel";
 import { removeProject, updateProject } from "../projects/projectViewModel";
 import { simulateProject } from "../../shared/domain/simulation";
+import { useBudgetSweep } from "../budget-sweep/useBudgetSweep";
+
+const emptySweepProject: LatencyProject = {
+  id: "__sweep_placeholder__",
+  title: "",
+  nodes: [],
+  concurrencyLimit: null,
+  scenarios: [],
+  createdAt: 0,
+  updatedAt: 0,
+};
 
 export type LabStatus =
   "loading" | "ready" | "editing" | "simulating" | "error" | "completed";
 export type LabModule =
-  "projects" | "graph" | "simulation" | "scenarios" | "archive";
+  | "projects"
+  | "graph"
+  | "simulation"
+  | "sweep"
+  | "scenarios"
+  | "archive";
 
 export function useLatencyLab() {
   const repository = useMemo(() => new ProjectRepository(), []);
@@ -143,6 +159,11 @@ export function useLatencyLab() {
     },
     [commit],
   );
+
+  // 扫描控制器只依赖当前项目与预算假设；快照保存走与编辑相同的提交流。
+  // 文档载入前用空项目占位（面板此时不会渲染），保证 Hook 调用顺序稳定。
+  const sweepProject = activeProject ?? emptySweepProject;
+  const sweepController = useBudgetSweep(sweepProject, mode, editProject);
 
   const chooseProject = useCallback(
     (id: string) => {
@@ -300,5 +321,6 @@ export function useLatencyLab() {
     comparisonScenario,
     scenarioComparison,
     selectComparisonScenario,
+    sweepController,
   };
 }
